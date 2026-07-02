@@ -36,12 +36,12 @@ export const robinhood = defineChain({
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc.chain.robinhood.com"] },
+    default: { http: ["https://rpc.mainnet.chain.robinhood.com"] },
   },
   blockExplorers: {
     default: {
       name: "Robinhood Chain Explorer",
-      url: "https://explorer.chain.robinhood.com/",
+      url: "https://robinhoodchain.blockscout.com",
     },
   },
 });
@@ -104,13 +104,13 @@ export type NetworkContext =
     };
 
 export function isEvmNetworkContext(
-  context: NetworkContext
+  context: NetworkContext,
 ): context is Extract<NetworkContext, { family: "evm" }> {
   return context.family === "evm";
 }
 
 export function isSolanaNetworkContext(
-  context: NetworkContext
+  context: NetworkContext,
 ): context is Extract<NetworkContext, { family: "solana" }> {
   return context.family === "solana";
 }
@@ -138,7 +138,7 @@ export function createEvmNetworkContext(chainId: number): NetworkContext {
 }
 
 export function createSolanaNetworkContext(
-  cluster: SolanaCluster
+  cluster: SolanaCluster,
 ): NetworkContext {
   return {
     family: "solana",
