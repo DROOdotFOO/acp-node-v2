@@ -13,11 +13,10 @@ import type { AcpAgentOffering, FeeUnit } from "../../index.js";
 export type HexAddress = `0x${string}`;
 
 /**
- * FEE UNIT — CONFIRM WITH THE VIRTUALS BACKEND BEFORE RELYING ON THIS.
- *
- * Raxol's agent prices in basis points (bps). The Virtuals frontend may display
- * percent. Both buyer and seller import this ONE constant so they always agree;
- * `computePercentageFee()` takes the unit explicitly and never guesses.
+ * Fee unit for this example. Whether a percentage offering's priceValue is
+ * basis points or percent is a registry convention that must be confirmed
+ * before relying on it. Buyer and seller share this one constant so they always
+ * agree, and `computePercentageFee` takes the unit explicitly.
  */
 export const FEE_UNIT: FeeUnit = "bps";
 
@@ -91,7 +90,16 @@ export function parseTransferRequirement(
   };
 }
 
-/** Notional bound in the (stub) signed intent, as bigint atomic units. */
+/**
+ * Notional bound in the (stub) signed intent, as bigint atomic units.
+ *
+ * This reads a plaintext field the buyer supplied, so it is not a real check on
+ * its own: the buyer can set `boundNotionalAtomic` to any value. It stands in
+ * for recovering the notional from the verified intent signature (Permit2 /
+ * ERC-3009), which the buyer cannot forge. `assertNotionalMatches` is only as
+ * trustworthy as the value this returns, so replace the stub with signature
+ * verification before using it with live funds.
+ */
 export function boundNotionalFromIntent(intent: SignedIntentStub): bigint {
   return BigInt(intent.boundNotionalAtomic);
 }
@@ -99,10 +107,9 @@ export function boundNotionalFromIntent(intent: SignedIntentStub): bigint {
 /**
  * Locally-constructed percentage offering (`requiredFunds: false`).
  *
- * The Virtuals registry does not yet allow LISTING this shape — relaxing that
- * is the server-side change this example motivates — but the SDK and the
- * on-chain contract already support the job flow, so we build the offering
- * object here to drive the demo end to end without a registry row.
+ * The registry does not yet allow listing this shape, but the SDK and the
+ * on-chain contract already support the job flow, so the offering is built here
+ * to run the demo end to end without a registry row.
  */
 export function buildTransferOffering(feeRate: number): AcpAgentOffering {
   return {

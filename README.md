@@ -461,10 +461,10 @@ await session.submit(
 );
 ```
 
-This model answers the two custody objections directly: the notional is bound in
-the buyer's signed intent (seller rejects a mismatch, buyer previews the exact
-fee before funding), and a dispute reduces to "does the settlement tx exist on
-the destination chain?" — with only the fee ever at risk, never the principal.
+Two properties fall out of this. The notional is bound in the buyer's signed
+intent, so the seller rejects a mismatch and the buyer previews the exact fee
+before funding. And a dispute reduces to whether the settlement tx exists on the
+destination chain, with only the fee ever at risk, never the principal.
 
 > **Fee unit is a backend convention to confirm:** whether `priceValue` is
 > **basis points** or **percent** must match the Virtuals registry.

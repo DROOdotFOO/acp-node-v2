@@ -25,16 +25,16 @@ dotenv.config({ quiet: true });
 // ---------------------------------------------------------------------------
 // Off-escrow proportional-fee seller (facilitator).
 //
-//   requirement message  → parse; cross-check the DECLARED notional against the
-//                          notional BOUND in the buyer's signed intent (reject a
+//   requirement message  → parse; check the declared notional against the
+//                          notional bound in the buyer's signed intent (reject a
 //                          mismatch); compute fee = rate * notional;
-//                          session.setBudget(fee)   ← escrows ONLY the fee
+//                          session.setBudget(fee) escrows only the fee
 //   budget.set           → buyer funds the fee
-//   job.funded           → relay the signed intent to Xochi (STUB), then
+//   job.funded           → relay the signed intent to Xochi (stubbed), then
 //                          submit the settlement tx hash as the deliverable
 //   job.completed        → transcript
 //
-// The principal never touches this wallet — the SDK escrows only the fee.
+// The principal never touches this wallet; the SDK escrows only the fee.
 //
 // Required env: SELLER_WALLET_ADDRESS, SELLER_WALLET_ID, SELLER_SIGNER_PRIVATE_KEY.
 // Optional: OFF_ESCROW_FEE_RATE (default 8; must match the buyer).
@@ -79,17 +79,16 @@ function extractTransferRequirement(
 }
 
 /**
- * STUB for the Xochi relay. In the real flow this hands the buyer's signed
+ * Placeholder for the Xochi relay. The real relay hands the buyer's signed
  * intent to Raxol.ACP.Xochi.Settler (`execute_signed/2`) and polls to
- * settlement on the DESTINATION chain (`toChainId`), returning the settlement
- * tx hash mined there. TODO: replace with the real Settler relay; no funds
- * move here.
+ * settlement on the destination chain (`toChainId`), returning the settlement
+ * tx hash mined there. No funds move here; returns a deterministic fake hash.
  */
 async function relaySignedIntentToXochi(
   jobId: string,
   toChainId: number
 ): Promise<string> {
-  void toChainId; // the real relay settles on toChainId; stub ignores it
+  void toChainId; // the real relay settles on toChainId
   return `0x${jobId.replace(/\D/g, "").padStart(64, "0").slice(0, 64)}`;
 }
 
@@ -215,10 +214,10 @@ async function main(): Promise<void> {
       }
 
       try {
-        // Objection #1 (fee-base integrity): the declared notional must match
-        // the notional bound in the buyer's signed intent. Reject BEFORE any
-        // payment if it doesn't. (Decoding the bound value from a real intent
-        // is Xochi-specific and lives outside the SDK — stubbed here.)
+        // The declared notional must match the notional bound in the buyer's
+        // signed intent; reject before setting a budget if it doesn't. The stub
+        // boundNotionalFromIntent trusts a plaintext field — production code
+        // verifies the signature instead (see boundNotionalFromIntent).
         const declared = BigInt(req.notionalAtomic);
         assertNotionalMatches(declared, boundNotionalFromIntent(req.signedIntent));
 
@@ -227,6 +226,9 @@ async function main(): Promise<void> {
           session.jobId,
           `notional ${declared} → fee ${fee} atomic (${feeRate} ${FEE_UNIT})`
         );
+        // computePercentageFee returns the fee in the notional token's atomic
+        // units. Here the notional token is Base USDC, so it maps directly to a
+        // USDC budget; normalize first if the notional and fee tokens differ.
         await session.setBudget(AssetToken.usdcFromRaw(fee, session.chainId));
         log.job(session.jobId, "set budget to the fee");
       } catch (err) {

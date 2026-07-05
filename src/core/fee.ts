@@ -1,12 +1,11 @@
 import type { AcpAgentOffering } from "../events/types.js";
 
 /**
- * Unit of an offering's percentage `priceValue`.
+ * Unit of an offering's percentage `priceValue`: basis points or percent.
  *
- * IMPORTANT: this is a backend convention that MUST be confirmed against the
- * Virtuals registry before it is relied upon. Raxol's agent prices in basis
- * points; the Virtuals frontend may display percent. {@link computePercentageFee}
- * takes the unit explicitly and never guesses.
+ * Which one a `percentage` offering uses is a registry convention and must be
+ * confirmed before relying on it. {@link computePercentageFee} takes the unit
+ * explicitly rather than assuming one.
  */
 export type FeeUnit = "bps" | "percent";
 
@@ -18,9 +17,9 @@ const RATE_PRECISION = 1_000_000n;
 /**
  * Compute a proportional fee from a notional amount.
  *
- * The fee is returned in the SAME atomic units / token as `notionalAtomic`.
+ * The fee is returned in the same atomic units / token as `notionalAtomic`.
  * When the notional token differs from the fee (budget) token, the caller must
- * USD-normalize first — the SDK does not know cross-token rates.
+ * USD-normalize first; the SDK does not know cross-token rates.
  *
  * Rounds DOWN (integer division). `priceValue` may be fractional.
  *
@@ -96,10 +95,12 @@ function toBigIntAtomic(value: unknown, field: string): bigint {
  * call this before `setBudget` so an under- or over-declared notional is
  * rejected before any payment.
  *
- * NOTE: extracting `bound` from the signed intent is intent-standard-specific
- * (Xochi / Permit2 / ERC-3009) and intentionally lives OUTSIDE this SDK — this
- * helper only compares. Exact-match today; if a tolerance convention is agreed
- * with Virtuals, extend here.
+ * Extracting `bound` from the signed intent is intent-standard-specific
+ * (Permit2 / ERC-3009) and lives outside this SDK; this helper only compares.
+ * It is only as trustworthy as `bound`: pass a value recovered from the
+ * verified signature, not one the buyer supplied in the clear. Both amounts
+ * must use the same atomic scale (same token and decimals). The comparison is
+ * exact.
  */
 export function assertNotionalMatches(declared: bigint, bound: bigint): void {
   if (declared !== bound) {

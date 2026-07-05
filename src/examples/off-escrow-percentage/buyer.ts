@@ -25,13 +25,13 @@ dotenv.config({ quiet: true });
 //   2. createJobFromOffering()   → plain job (hook=0); the requirement carries
 //                                  the signed intent + fee notional
 //   3. budget.set                → recompute the fee from the notional and the
-//                                  offering rate; ONLY fund if it matches the
+//                                  offering rate; fund only if it matches the
 //                                  seller's proposed budget (buyer sees the
 //                                  exact fee before paying)
 //   4. job.submitted             → verify the settlement proof, then complete()
 //   5. job.completed             → transcript, buyer.stop()
 //
-// The transferred value never enters ACP escrow — ACP escrows only the fee. In
+// The transferred value never enters ACP escrow; ACP escrows only the fee. In
 // this stub the principal does not actually move; see the folder README.
 //
 // Required env: BUYER_WALLET_ADDRESS, BUYER_WALLET_ID, BUYER_SIGNER_PRIVATE_KEY,
@@ -102,8 +102,8 @@ async function main(): Promise<void> {
             session.jobId,
             `seller proposed budget ${proposed} atomic; expected fee ${expectedFee}`
           );
-          // Buyer-side integrity check: fund ONLY when the proposed fee equals
-          // the fee derived from the notional and the offering rate.
+          // Fund only when the proposed fee equals the fee derived from the
+          // notional and the offering rate.
           if (proposed !== expectedFee) {
             log.job(session.jobId, "budget != expected fee — rejecting");
             await session.reject(
@@ -146,8 +146,13 @@ async function main(): Promise<void> {
           }
           return;
         }
-        // TODO: verify proof.settlementTxHash exists on proof.chainId (RPC /
-        // explorer). Off-escrow disputes reduce to "does the tx exist?".
+        // A production evaluator confirms proof.settlementTxHash exists on
+        // proof.chainId (via RPC / explorer) and moved the expected notional to
+        // the recipient. This example only checks the proof's shape and
+        // destination chain, so completing here does not prove the transfer
+        // happened. This is why the job needs an evaluator: this buyer
+        // self-evaluates via evaluatorAddress, and under skip-evaluation the
+        // fee would auto-release on submit with no settlement check.
         log.job(
           session.jobId,
           `settlement proof: ${proof.settlementTxHash} on chain ${proof.chainId}`

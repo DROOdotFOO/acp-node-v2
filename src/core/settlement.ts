@@ -1,10 +1,10 @@
 /**
  * Settlement-proof deliverable convention for off-escrow facilitator jobs.
  *
- * For jobs where the transferred value moves OUTSIDE ACP escrow (the provider
+ * For jobs where the transferred value moves outside ACP escrow (the provider
  * only relays the buyer's signed intent), the deliverable is a proof that the
- * facilitated settlement happened on-chain — a settlement tx hash on the
- * destination chain — so an evaluator / reputation layer can verify it
+ * facilitated settlement happened on-chain: a settlement tx hash on the
+ * destination chain, so an evaluator / reputation layer can verify it
  * independently even though no ACP escrow moved the principal.
  */
 export interface SettlementDeliverable {
@@ -50,7 +50,9 @@ export function parseSettlementDeliverable(
   ) {
     return null;
   }
-  if (typeof o.chainId !== "number") return null;
+  if (typeof o.chainId !== "number" || !Number.isInteger(o.chainId) || o.chainId <= 0) {
+    return null;
+  }
 
   const out: SettlementDeliverable = {
     kind: "settlement",
@@ -72,7 +74,8 @@ export const SETTLEMENT_DELIVERABLE_SCHEMA = {
   properties: {
     kind: { const: "settlement" },
     settlementTxHash: { type: "string" },
-    chainId: { type: "number" },
+    // chain ids are positive integers (incl. the synthetic Solana ids 500/501)
+    chainId: { type: "integer", minimum: 1 },
     notional: { type: "string" },
     token: { type: "string" },
   },

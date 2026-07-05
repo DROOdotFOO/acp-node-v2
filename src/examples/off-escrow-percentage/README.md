@@ -24,7 +24,7 @@ intent (ERC-3009 / Permit2); the SDK job carries only the fee.
 sets `budget = fee`; the buyer funds the fee; `submit`/`complete` split the fee
 (90% provider / 5% platform / 5% evaluator). No contract change, no new hook.
 
-## The three integrity checks (answering the reviewer objections)
+## The three integrity checks
 
 1. **Notional can't be faked.** The buyer declares the notional in the
    requirement (`feeBasisField` → `notionalAtomic`), but it is also **bound in
@@ -85,6 +85,32 @@ npx tsx src/examples/off-escrow-percentage/buyer.ts
 | Variable | Default | Meaning |
 | -------- | ------- | ------- |
 | `OFF_ESCROW_FEE_RATE` | `8` | Fee rate in `FEE_UNIT`; buyer and seller must agree (the buyer's fee-preview check enforces it) |
+
+## Security — what this stub does not do
+
+The example demonstrates the ACP job *shape*, not a production-ready facilitator.
+Three things must be real before this is safe to run with live funds:
+
+1. **Signature verification.** `boundNotionalFromIntent` reads a plaintext field
+   here, so `assertNotionalMatches` currently compares two buyer-supplied values
+   and proves nothing. The whole "notional can't be faked" property depends on
+   recovering the notional from the buyer's **verified** intent signature
+   (Permit2 / ERC-3009), which lives outside this SDK (in raxol). Wire that up
+   first.
+2. **On-chain settlement check.** The evaluator here only checks the proof's
+   shape and destination chain. A real evaluator must confirm
+   `settlementTxHash` exists on the destination chain and moved the expected
+   notional to the recipient. Completing without that is not evidence the
+   transfer happened.
+3. **Always use an evaluator.** This buyer self-evaluates (`evaluatorAddress`).
+   Under skip-evaluation (`evaluatorAddress` omitted) a `submit` auto-completes
+   and releases the fee with no settlement check — do not use skip-evaluation
+   for this job type.
+
+Also note the fee is computed in the **notional token's** units;
+`computePercentageFee` does not convert tokens. The example works because the
+notional token is USDC. If the notional token differs from the fee (budget)
+token, USD-normalize before `setBudget`.
 
 ## OPEN QUESTION — confirm before merge
 
