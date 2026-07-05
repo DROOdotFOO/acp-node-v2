@@ -17,6 +17,7 @@ import {
   boundNotionalFromIntent,
   buildTransferOffering,
   parseTransferRequirement,
+  type TransferRequirement,
 } from "./jobTypes.js";
 
 dotenv.config({ quiet: true });
@@ -61,13 +62,34 @@ const log = {
     console.error(`[seller-offesc] [error] ${m}`, e ?? ""),
 };
 
+/** Recover the transfer requirement from the job's requirement message. */
+function extractTransferRequirement(
+  session: JobSession
+): TransferRequirement | null {
+  for (const e of session.entries) {
+    if (e.kind === "message" && e.contentType === "requirement") {
+      try {
+        return parseTransferRequirement(JSON.parse(e.content));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * STUB for the Xochi relay. In the real flow this hands the buyer's signed
  * intent to Raxol.ACP.Xochi.Settler (`execute_signed/2`) and polls to
- * settlement on the destination chain, returning the settlement tx hash.
- * TODO: replace with the real Settler relay; no funds move here.
+ * settlement on the DESTINATION chain (`toChainId`), returning the settlement
+ * tx hash mined there. TODO: replace with the real Settler relay; no funds
+ * move here.
  */
-async function relaySignedIntentToXochi(jobId: string): Promise<string> {
+async function relaySignedIntentToXochi(
+  jobId: string,
+  toChainId: number
+): Promise<string> {
+  void toChainId; // the real relay settles on toChainId; stub ignores it
   return `0x${jobId.replace(/\D/g, "").padStart(64, "0").slice(0, 64)}`;
 }
 
@@ -100,15 +122,30 @@ async function main(): Promise<void> {
           );
           break;
 
-        case "job.funded":
-          log.job(session.jobId, "fee funded, relaying transfer");
+        case "job.funded": {
+          const req = extractTransferRequirement(session);
+          if (!req) {
+            log.error(
+              `job ${session.jobId}: could not recover transfer requirement to relay`
+            );
+            break;
+          }
+          log.job(
+            session.jobId,
+            `fee funded, relaying transfer to chain ${req.toChainId}`
+          );
           try {
             const settlementTxHash = await relaySignedIntentToXochi(
-              session.jobId
+              session.jobId,
+              req.toChainId
             );
+            // The deliverable's chainId is the DESTINATION chain where the
+            // settlement tx was mined, not the ACP job chain (Base).
             const deliverable = buildSettlementDeliverable({
               settlementTxHash,
-              chainId: session.job?.chainId ?? session.chainId,
+              chainId: req.toChainId,
+              notional: req.notionalAtomic,
+              token: req.token,
             });
             await session.submit(deliverable);
             log.job(session.jobId, `submitted settlement ${settlementTxHash}`);
@@ -116,6 +153,7 @@ async function main(): Promise<void> {
             log.error(`relay/submit failed on job ${session.jobId}`, err);
           }
           break;
+        }
 
         case "job.completed":
           log.job(session.jobId, "completed (fee released)");

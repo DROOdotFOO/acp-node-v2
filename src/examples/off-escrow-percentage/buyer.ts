@@ -66,6 +66,7 @@ async function main(): Promise<void> {
   const requirementData: Record<string, unknown> = {
     ...exampleTransferRequirement,
   };
+  const expectedDestChainId = exampleTransferRequirement.toChainId;
   const expectedFee = computePercentageFee(
     readFeeBasis(offering, requirementData),
     offering.priceValue,
@@ -124,6 +125,22 @@ async function main(): Promise<void> {
           log.job(session.jobId, "deliverable is not a settlement proof — rejecting");
           try {
             await session.reject("Deliverable is not a valid settlement proof");
+          } catch (err) {
+            log.error(`reject failed on job ${session.jobId}`, err);
+          }
+          return;
+        }
+        // The settlement must be on the transfer's destination chain. A
+        // well-formed proof mined on any other chain does not settle this job.
+        if (proof.chainId !== expectedDestChainId) {
+          log.job(
+            session.jobId,
+            `settlement on chain ${proof.chainId}, expected destination ${expectedDestChainId} — rejecting`
+          );
+          try {
+            await session.reject(
+              `Settlement proof chain ${proof.chainId} != expected destination ${expectedDestChainId}`
+            );
           } catch (err) {
             log.error(`reject failed on job ${session.jobId}`, err);
           }
