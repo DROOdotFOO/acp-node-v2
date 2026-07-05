@@ -124,9 +124,21 @@ async function main(): Promise<void> {
         case "job.funded": {
           const req = extractTransferRequirement(session);
           if (!req) {
+            // A funded job always has a parseable requirement (the budget was
+            // set from it), so this is an unexpected room. Surface it instead
+            // of stalling; the job expires at its SLA and the fee refunds.
             log.error(
               `job ${session.jobId}: could not recover transfer requirement to relay`
             );
+            try {
+              await session.sendMessage(
+                "Cannot recover the transfer requirement for this job; not " +
+                  "submitting a deliverable. The job will expire at its SLA " +
+                  "and the fee will be refunded."
+              );
+            } catch (err) {
+              log.error(`notify failed on job ${session.jobId}`, err);
+            }
             break;
           }
           log.job(

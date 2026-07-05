@@ -14,6 +14,7 @@ import {
   FEE_UNIT,
   buildTransferOffering,
   exampleTransferRequirement,
+  type TransferRequirement,
 } from "./jobTypes.js";
 
 dotenv.config({ quiet: true });
@@ -63,10 +64,11 @@ const log = {
 async function main(): Promise<void> {
   const feeRate = Number(process.env.OFF_ESCROW_FEE_RATE ?? DEFAULT_FEE_RATE);
   const offering = buildTransferOffering(feeRate);
-  const requirementData: Record<string, unknown> = {
-    ...exampleTransferRequirement,
-  };
-  const expectedDestChainId = exampleTransferRequirement.toChainId;
+  // Derive the requirement and the expected destination chain from the same
+  // object, so customizing the requirement keeps the settlement check correct.
+  const requirement: TransferRequirement = { ...exampleTransferRequirement };
+  const requirementData: Record<string, unknown> = { ...requirement };
+  const expectedDestChainId = requirement.toChainId;
   const expectedFee = computePercentageFee(
     readFeeBasis(offering, requirementData),
     offering.priceValue,
