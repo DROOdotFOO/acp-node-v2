@@ -74,9 +74,16 @@ export function readFeeBasis(
 function toBigIntAtomic(value: unknown, field: string): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") {
-    if (!Number.isInteger(value)) {
+    // A JS number cannot represent an integer above 2^53 exactly, so a large
+    // atomic amount is silently rounded before it ever reaches BigInt (and
+    // Number.isInteger still returns true for the rounded double). Reject
+    // unsafe values and require large notionals as a decimal string, which the
+    // branch below converts losslessly.
+    if (!Number.isSafeInteger(value)) {
       throw new Error(
-        `Fee-basis field "${field}" must be an integer atomic amount, got ${value}`
+        `Fee-basis field "${field}" must be a safe-integer atomic amount ` +
+          `(<= ${Number.MAX_SAFE_INTEGER}); pass larger amounts as a decimal ` +
+          `string, got ${value}`
       );
     }
     return BigInt(value);

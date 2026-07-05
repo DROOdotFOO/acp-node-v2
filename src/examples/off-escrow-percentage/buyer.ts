@@ -6,6 +6,7 @@ import {
   computePercentageFee,
   readFeeBasis,
   parseSettlementDeliverable,
+  type AcpAgentOffering,
   type JobRoomEntry,
   type JobSession,
 } from "../../index.js";
@@ -14,6 +15,7 @@ import {
   FEE_UNIT,
   buildTransferOffering,
   exampleTransferRequirement,
+  parseTransferRequirement,
   type TransferRequirement,
 } from "./jobTypes.js";
 
@@ -61,19 +63,39 @@ const log = {
     console.error(`[buyer-offesc] [error] ${m}`, e ?? ""),
 };
 
-async function main(): Promise<void> {
-  const feeRate = Number(process.env.OFF_ESCROW_FEE_RATE ?? DEFAULT_FEE_RATE);
-  const offering = buildTransferOffering(feeRate);
-  // Derive the requirement and the expected destination chain from the same
-  // object, so customizing the requirement keeps the settlement check correct.
-  const requirement: TransferRequirement = { ...exampleTransferRequirement };
-  const requirementData: Record<string, unknown> = { ...requirement };
-  const expectedDestChainId = requirement.toChainId;
-  const expectedFee = computePercentageFee(
-    readFeeBasis(offering, requirementData),
+/** Recover the transfer requirement from the job's own requirement message. */
+function extractTransferRequirement(
+  session: JobSession
+): TransferRequirement | null {
+  for (const e of session.entries) {
+    if (e.kind === "message" && e.contentType === "requirement") {
+      try {
+        return parseTransferRequirement(JSON.parse(e.content));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+/** Fee the buyer expects for a job, from that job's declared notional. */
+function expectedFeeFor(
+  offering: AcpAgentOffering,
+  req: TransferRequirement
+): bigint {
+  return computePercentageFee(
+    readFeeBasis(offering, { ...req }),
     offering.priceValue,
     FEE_UNIT
   );
+}
+
+async function main(): Promise<void> {
+  const feeRate = Number(process.env.OFF_ESCROW_FEE_RATE ?? DEFAULT_FEE_RATE);
+  const offering = buildTransferOffering(feeRate);
+  const requirement: TransferRequirement = { ...exampleTransferRequirement };
+  const requirementData: Record<string, unknown> = { ...requirement };
 
   const buyer = await AcpAgent.create({
     provider: await PrivyAlchemyEvmProviderAdapter.create({
@@ -88,8 +110,9 @@ async function main(): Promise<void> {
   const buyerAddressLower = buyerAddress.toLowerCase();
   log.info(`address: ${buyerAddress}`);
   log.info(
-    `fee rate ${feeRate} ${FEE_UNIT}; expected fee ${expectedFee} atomic ` +
-      `on notional ${exampleTransferRequirement.notionalAtomic}`
+    `fee rate ${feeRate} ${FEE_UNIT}; expected fee ` +
+      `${expectedFeeFor(offering, requirement)} atomic on notional ` +
+      `${requirement.notionalAtomic}`
   );
 
   buyer.on("entry", async (session: JobSession, entry: JobRoomEntry) => {
@@ -99,6 +122,15 @@ async function main(): Promise<void> {
       case "budget.set": {
         try {
           await session.fetchJob();
+          // Recompute the fee from THIS job's requirement, not a value cached
+          // for another job.
+          const req = extractTransferRequirement(session);
+          if (!req) {
+            log.job(session.jobId, "no transfer requirement in job — rejecting");
+            await session.reject("Could not recover the transfer requirement");
+            return;
+          }
+          const expectedFee = expectedFeeFor(offering, req);
           const proposed = session.job?.budget.rawAmount;
           log.job(
             session.jobId,
@@ -122,6 +154,19 @@ async function main(): Promise<void> {
       }
 
       case "job.submitted": {
+        // The destination chain comes from THIS job's requirement, not a cached
+        // constant.
+        const req = extractTransferRequirement(session);
+        if (!req) {
+          log.job(session.jobId, "no transfer requirement in job — rejecting");
+          try {
+            await session.reject("Could not recover the transfer requirement");
+          } catch (err) {
+            log.error(`reject failed on job ${session.jobId}`, err);
+          }
+          return;
+        }
+        const expectedDestChainId = req.toChainId;
         const proof = parseSettlementDeliverable(entry.event.deliverable);
         if (!proof) {
           log.job(session.jobId, "deliverable is not a settlement proof — rejecting");
